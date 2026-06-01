@@ -21,6 +21,13 @@ int main(){
   server_addr.sin_family = AF_INET;
   server_addr.sin_addr.s_addr = INADDR_ANY;
   server_addr.sin_port = htons(8080);
+  
+  // free socket to reuse it under TIME_WAIT
+  int opt =1;
+  setsockopt(
+      server_fd, SOL_SOCKET , SO_REUSEADDR , &opt , sizeof(opt)
+      );
+
 
   // bind
   if(bind(server_fd , (sockaddr*)&server_addr , sizeof(server_addr))< 0){
@@ -78,8 +85,13 @@ int main(){
   for (auto & [k , v] :req.headers){
     std::cout << k << " => " << v << '\n';
   }
+  
+  std::cout<<"Body: \n";
 
-
+  for(auto s:req.body){
+    std::cout << s ;
+  }
+  std::cout << "\n\n\nThe request data ends\n\n\n";
 
   close(client_fd);
   close(server_fd);

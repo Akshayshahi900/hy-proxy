@@ -24,13 +24,14 @@ HttpRequest parseRequest(const std::string &raw){
   // headers
   std::string line;
 
-
+//TODO Parse for the -d data flag
   while(std::getline(stream , line)){
     if(!line.empty()&& line.back() == '\r'){
       line.pop_back();
     }
 
     if(line.empty()) break;
+  
 
     size_t pos = line.find(':');
 
@@ -47,16 +48,36 @@ HttpRequest parseRequest(const std::string &raw){
     req.headers[key] = value;
   
   }
+
+  if(req.headers.find("Content-Length") != req.headers.end()){
+
+    int length = std::stoi(req.headers["Content-Length"]);
+
+    if(length > 0){
+      req.body.resize(length);
+    
+
+    stream.read(&req.body[0] ,length);
+  }
+  
+  }
+
   return req;
 }
 /*
 int main(){
-  std::string raw = "GET /hello HTTP/1.1\r\n"
-                    "Host: localhost\r\n"
-                    "User-Agent: curl\r\n"
-                    "\r\n";
-  HttpRequest req= parseRequest(raw);
-
+   
+HttpRequest req= parseRequest(raw);
+  std::string raw =" POST /api/v1/users HTTP/1.1\r\n"
+  "Host: localhost:8080\r\n"
+  "User-Agent: curl/8.4.0\r\n"
+  "Accept: application/json\r\n"
+  "Content-Type: application/json\r\n"
+  "Content-Length: 47\r\n"
+  "Connection: close\r\n"
+  "\r\n"
+  "{"username":"alex123","email":"alex@email.com"}";
+  
   std::cout << "Method: " << req.method << '\n';
 
   std::cout << "Path: " << req.path << '\n';
