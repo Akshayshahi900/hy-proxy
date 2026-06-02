@@ -1,8 +1,12 @@
 #include<iostream>
 #include<unistd.h>
 #include<sys/socket.h>
+#include<sys/epoll.h>
 #include<netinet/in.h>
+#include<fcntl.h>
 #include<cstring>
+#include<vector>
+
 #include "parser.h"
 #include "request.h"
 
@@ -42,6 +46,21 @@ int main(){
   }
 
   std::cout << "Server listening on port 8080\n";
+
+  // epoll
+
+  int flags = fcntl(server_fd , F_GETFL , 0);
+  fcntl(server_fd , F_SETFL , flags | O_NONBLOCK);
+  
+
+
+  int epoll_fd = epoll_create1(0);
+  
+  epoll_event event{};
+
+  event.events = EPOLLIN;
+  event.data.fd = server_fd;
+
   while(true){
   //accept
   int client_fd = accept(server_fd, nullptr , nullptr);
