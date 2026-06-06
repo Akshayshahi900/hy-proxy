@@ -10,7 +10,7 @@
 #include "parser.h"
 #include "request.h"
 #include <unordered_map>
-
+#include "socket.h"
 #define MAX_EVENTS 64
 #define BUFFER_SIZE 1024
 
@@ -23,60 +23,16 @@ struct Connection {
 
 std::unordered_map<int , Connection> connections;
 
-void make_non_blocking(int fd ){
-  int flags = fcntl(fd , F_GETFL , 0);
-
-  if(flags == -1){
-    perror("fcntl F_GETFL");
-  
-    exit(1);
-  }
-  if(fcntl(fd , F_SETFL , flags | O_NONBLOCK) == -1){
-    perror("fcntl F_SETFL");
-    exit(1);
-  }
-}
 
 
 int main(){
-
-  // create socket
-  int server_fd = socket(AF_INET , SOCK_STREAM , 0);
-
-  if(server_fd < 0){
-    perror("socket");
-    return 1;
-  }
-
-  // define server address
-  sockaddr_in server_addr{};
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = INADDR_ANY;
-  server_addr.sin_port = htons(8080);
+  int server_fd = create_tcp_connection(8080);
   
-  // free socket to reuse it under TIME_WAIT
-  int opt =1;
-  setsockopt(
-      server_fd, SOL_SOCKET , SO_REUSEADDR , &opt , sizeof(opt)
-      );
-
-  // bind
-  if(bind(server_fd , (sockaddr*)&server_addr , sizeof(server_addr))< 0){
-    perror("bind");
-    return 1;
-  }
-  
-  // listen
-  if(listen(server_fd, 5)<0){
-    perror("listen");
-    return 1;
+  if(server_fd == -1){
+    perror("Create Socket");
   }
 
-  std::cout << "Server listening on port 8080\n";
-
-
-  // make the socket non-blocking
-  make_non_blocking(server_fd);
+  std::cout << "Server listening on PORT 8080\n" ;
 
 
  // EPOLL INSTANCE
@@ -168,6 +124,10 @@ int main(){
         for(auto s:req.body){
           std::cout << s ;
         }
+
+        //instead of printing the req request i have to forward it to the loadbalancer right
+       load_balancer(req);
+
 
       //TODO Make a better response and calculate length of response body without hardcoding
         conn.write_buffer = "HTTP/1.1 200 OK\r\n"
