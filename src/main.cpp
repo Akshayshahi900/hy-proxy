@@ -8,22 +8,106 @@
 #include<vector>
 #include<cstdint>
 #include<unordered_map>
+#include<errno.h>
 
 #include "connection.h"
 #include "parser.h"
 #include "request.h"
 #include "socket.h"
 #include "load_balancer.h"
-#include "proxy.h"
 
 #define MAX_EVENTS 64
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 4096
 std::unordered_map<int , Connection> connections;
-std::unordered_map<int , int> backend_to_client;
+int epoll_fd;
+int server_fd;
 
+bool has_full_request(const std::string & buff){
+  return buf.find("\r\n\r\n") != std::string::npos;
+}
+ 
+void handle_reading_request(Connection& conn){
+  char buf[BUFFER_SIZE];
 
+  ssize_t n = recv(conn.client_fd , buf , BUFFER_SIZE , MSG_DONTWAIT);
+  
+  if(n==0){
+    std::cout << "[" << conn.client_fd << "] Client closed \n";
+    conn.state = State::CLOSED;
+    return;
+  }
 
+  if(n < 0){
+    
+    if(errno == EAGAIN || errno == EWOULDBLOCK){
+      return;
+    }
+    perror("recv");
+    conn.state = State::CLOSED;
+    return;
 
+  }
+
+  conn.request_buffer.append(buf , n );
+  
+  std::cout << "[" <<conn.client_fd << "] Recieved " << n << "bytes. Total: " << conn.request_buffer.size() << "\n";
+ 
+  if(has_full_request(conn.request_buffer)){
+    std::cout<< "[" << conn.client_fd << "] Got full HTTP request\n";
+
+    HttpRequest req = parseRequest(conn.request_buffer);
+    
+    std::cout<< "[" << conn.client_fd << "] Method: " << req.method << ", Path: " << req.path << "\n";
+
+    uint16_t backend_port = load_balancer(req);
+    
+    std::cout << "[" << conn.client_fd << "]  Load balancer chose port: " << backend_port << "\n";
+
+    
+    conn.backend_fd = connect_to_backend("127.0.0.1", backend_port);
+    
+    if(conn.backend_fd < 0){
+      std::cout << "[" << conn.client_fd << "] Failed to create a backend socket\n";
+
+      conn.state = State::CLOSED;
+      return ;
+    }
+
+    std::cout << "[" << conn.client_fd << "] Connecting to backend... \n";
+
+    conn.state = State::CONNECTING_BACKEND;
+    
+    // add backend_fd to epoll, using EPOLLOUT for connection readiness
+    
+    epoll_event ev ={};
+    ev.events = EPOLLOUT | EPOLLERR;
+    ev.data.fd = conn.backend_fd;
+    epoll_ctl(epoll_fd , EPOLL_CTL_ADD , conn.backend_fd , &ev);
+  }
+}
+
+void handle_connecting_backend(Connection& conn){
+  int err = 0;
+  socklen_t len = sizeof(err);
+
+  int ret = getsockopt(conn.backend_fd , SOL_SOCKET , SO_ERROR , &err , &len);
+
+  if(ret < 0 || err != 0){
+    std::cout << "[" << conn.client_fd << "] Backend Connect Failed: " << strerror(err) <<"\n";
+    conn.state = State::CLOSED;
+    return;
+  }
+  std::cout <<  "[" << conn.client_fd << "] Backend connected successfully!\n";
+
+  conn.state = State::FORWARDING_REQUEST;
+  
+  epoll_event ev = {};
+  ev.events = EPOLLOUT | EPOLLIN ;
+  ev.data.fd = conn.backend_fd;
+
+  epoll_ctl(epoll_fd , EPOLL_MOD , conn.backend_fd , &ev);
+
+}
 int main(){
   int server_fd = create_server_socket(8080);
   
