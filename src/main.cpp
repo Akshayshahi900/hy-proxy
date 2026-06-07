@@ -9,7 +9,7 @@
 #include<cstdint>
 #include<unordered_map>
 
-
+#include "connection.h"
 #include "parser.h"
 #include "request.h"
 #include "socket.h"
@@ -18,15 +18,9 @@
 
 #define MAX_EVENTS 64
 #define BUFFER_SIZE 1024
-
-struct Connection {
-  int fd ;
-
-  std::string read_buffer;
-  std::string write_buffer;
-};
-
 std::unordered_map<int , Connection> connections;
+std::unordered_map<int , int> backend_to_client;
+
 
 
 
@@ -111,7 +105,7 @@ int main(){
         
         conn.read_buffer.append(buffer , bytes_read);
 
-        
+        /*      
         HttpRequest req = parseRequest(conn.read_buffer);
 
         std::cout << "Method: " << req.method << '\n';
@@ -129,15 +123,18 @@ int main(){
         for(auto s:req.body){
           std::cout << s ;
         }
+        */
 
-        //instead of printing the req request i have to forward it to the loadbalancer right
+
         uint16_t backend = load_balancer(req);
         
-        std::string response = proxy(raw , backend);
+        //std::string response = proxy(raw , backend);
+        conn.backend_fd = connect_to_backend(
+            "127.0.0.1" , backend
+            );
+        conn.request_buffer = raw;
         
-
-        // client send response back      
-        conn.write_buffer = response;
+        conn.state = State::CONNECTING_BACKEND;
 
         int bytes_send = send(conn.fd , conn.write_buffer.data() ,conn.write_buffer.size() , 0);
   
