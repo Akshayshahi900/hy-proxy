@@ -15,7 +15,7 @@
 #include "request.h"
 #include "socket.h"
 #include "load_balancer.h"
-
+#include "backend.h"
 #define MAX_EVENTS 64
 #define BUFFER_SIZE 4096
 
@@ -58,10 +58,11 @@ void handle_reading_request(Connection& conn) {
         std::cout << "[" << conn.client_fd << "] Method: " << req.method 
                   << ", Path: " << req.path << "\n";
         
-        uint16_t backend_port = load_balancer(req);
-        std::cout << "[" << conn.client_fd << "] Load balancer chose port: " << backend_port << "\n";
+        Backend backend_available  = load_balancer();
+         
+        std::cout << "[" << conn.client_fd << "] Load balancer chose port: " << backend_available.port << "\n";
         
-        conn.backend_fd = connect_to_backend("127.0.0.1", backend_port);
+        conn.backend_fd = connect_to_backend(backend_available.host, backend_available.port);
         
         if (conn.backend_fd < 0) {
             std::cout << "[" << conn.client_fd << "] Failed to create backend socket\n";

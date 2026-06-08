@@ -1,8 +1,7 @@
 #pragma once
 
 #include <iostream>
-#include "request.h"
 #include <cstdint>
+#include "backend.h"
 
-
-uint16_t load_balancer(HttpRequest req);
+Backend load_balancer();
